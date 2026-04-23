@@ -1,0 +1,418 @@
+{
+  "info": {
+    "seller": "RODRIGO DE PAULA RODRIGUES",
+    "client": "GRUPO EMPORIO"
+  },
+  "Profundidade Pontos": {
+    "values": {
+      "valorAtual": 64,
+      "posicaoAtual": {
+        "metaAtingida": 60,
+        "pontuacaoGanha": 15
+      },
+      "proximosNiveis": [
+        {
+          "metaNecessaria": 80,
+          "pontuacaoPossivel": 20,
+          "pontuacaoAtual": 64,
+          "faltaParaNivel": 16
+        }
+      ]
+    },
+    "name": "Profundidade Pontos"
+  },
+  "Profundidade Grupo 1": {
+    "values": {
+      "scoreAtual": 0,
+      "itensValidos": [
+        {
+          "label": "GIANDUIA (TRAMA)",
+          "status": "CARTEIRA",
+          "group": "GRUPO 1"
+        },
+        {
+          "label": "TITÂNIO (TRAMA)",
+          "status": "CARTEIRA",
+          "group": ""
+        },
+        {
+          "label": "BRANCO ÁRTICO (ORIGINAL)",
+          "status": "CARTEIRA",
+          "group": "ULTRA PREMIUM"
+        },
+        {
+          "label": "NOCE AMÊNDOA (ESSENCIAL)",
+          "status": "CARTEIRA",
+          "group": ""
+        }
+      ],
+      "regraAtual": "10 padrões: 10ptos",
+      "quantidadeValidos": 4,
+      "itensInvalidos": [
+        {
+          "label": "AURORA (TRAMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "PALHA (TRAMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "CARVALHO LIR (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "CARVALHO DIAN (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "GIANDUIA PURO (SENSE)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "LINHO BELGA (SENSE)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "OFF WHITE SUAVE (SENSE)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "PRETO (ORIGINAL)",
+          "status": "Ñ OK",
+          "group": "ULTRA PREMIUM"
+        },
+        {
+          "label": "NOCE MARE (ESSENCIAL)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "AMÊNDOLA RÚSTICA (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "LARNACA (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "NOGUEIRA CADIZ (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "RIVIERA (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        }
+      ]
+    },
+    "name": "Profundidade Grupo 1"
+  },
+  "Profundidade Últimos 12 meses": {
+    "values": {
+      "itensValidos": [
+        {
+          "label": "GIANDUIA (TRAMA)",
+          "status": "OK",
+          "group": "GRUPO 1"
+        },
+        {
+          "label": "TITÂNIO (TRAMA)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "AURORA (TRAMA)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "PALHA (TRAMA)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "CARVALHO DIAN (PRISMA)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "GIANDUIA PURO (SENSE)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "LINHO BELGA (SENSE)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "OFF WHITE SUAVE (SENSE)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "BRANCO ÁRTICO (ORIGINAL)",
+          "status": "OK",
+          "group": "ULTRA PREMIUM"
+        },
+        {
+          "label": "NOCE AMÊNDOA (ESSENCIAL)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "NOCE MARE (ESSENCIAL)",
+          "status": "OK",
+          "group": ""
+        },
+        {
+          "label": "AMÊNDOLA RÚSTICA (PRISMA)",
+          "status": "OK",
+          "group": ""
+        }
+      ],
+      "quantidadeValidos": 12,
+      "itensInvalidos": [
+        {
+          "label": "CARVALHO LIR (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "PRETO (ORIGINAL)",
+          "status": "Ñ OK",
+          "group": "ULTRA PREMIUM"
+        },
+        {
+          "label": "LARNACA (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "NOGUEIRA CADIZ (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        },
+        {
+          "label": "RIVIERA (PRISMA)",
+          "status": "Ñ OK",
+          "group": ""
+        }
+      ]
+    },
+    "name": "Profundidade Últimos 12 meses"
+  },
+  "Profundidade Lançamentos": {
+    "values": {
+      "scoreAtual": 10,
+      "regrasAtuais": [
+        "=5 padrões: 10ptos",
+        ">= 3 Padrões: 5ptos"
+      ],
+      "itensValidos": [
+        {
+          "label": "BEGE PAPIRO (ESSENCIAL)",
+          "status": "OK"
+        },
+        {
+          "label": "MARROM RETRÔ (ESSENCIAL)",
+          "status": "OK"
+        },
+        {
+          "label": "HIBISCO (ESSENCIAL)",
+          "status": "OK"
+        },
+        {
+          "label": "TIMBORANA SILVESTRE (THERA)",
+          "status": "OK"
+        },
+        {
+          "label": "CARVALHO BRUN (THERA)",
+          "status": "OK"
+        }
+      ],
+      "quantidadeValidos": 5,
+      "itensInvalidos": []
+    },
+    "name": "Profundidade Lançamentos"
+  },
+  "Profundidade Ultra Premium": {
+    "values": {
+      "scoreAtual": 0,
+      "regraAtual": "15m³: 10ptos; >15m³: 0ptos",
+      "itens": [
+        {
+          "label": "Cart. Líq.",
+          "valor": 9.63
+        },
+        {
+          "label": "Real TRI",
+          "valor": 0
+        }
+      ],
+      "valorAtual": 9.63
+    },
+    "name": "Profundidade Ultra Premium"
+  },
+  "Politica": {
+    "values": {
+      "scoreAtual": 25,
+      "posicaoAtual": "E",
+      "descontoAtual": 5,
+      "ultimoTrimestre": {
+        "score": 80,
+        "posicao": "B",
+        "valor": 80,
+        "desconto": 12,
+        "valorNecessario": 55
+      },
+      "proximoNivel": {
+        "score": 90,
+        "posicao": "A",
+        "valor": 90,
+        "desconto": 14,
+        "valorNecessario": 65
+      },
+      "tabelaPosicoes": [
+        {
+          "posicao": "F",
+          "score": 0,
+          "desconto": 0
+        },
+        {
+          "posicao": "E",
+          "score": 25,
+          "desconto": 5
+        },
+        {
+          "posicao": "D",
+          "score": 50,
+          "desconto": 7
+        },
+        {
+          "posicao": "C",
+          "score": 70,
+          "desconto": 9
+        },
+        {
+          "posicao": "B",
+          "score": 80,
+          "desconto": 12
+        },
+        {
+          "posicao": "A",
+          "score": 90,
+          "desconto": 14
+        }
+      ],
+      "labelTriAtual": "REAL (2 TRI'26)"
+    },
+    "name": "Politica"
+  },
+  "Volume": {
+    "values": {
+      "posicaoAtual": {
+        "metaAtingida": 0,
+        "pontuacaoGanha": 0,
+        "scoreAtual": 0
+      },
+      "proximosNiveis": [
+        {
+          "metaNecessaria": 100,
+          "pontuacaoPossivel": 5,
+          "pontuacaoAtual": 70,
+          "faltaParaNivel": 77,
+          "faltaParaNivelTrimestre": 231
+        },
+        {
+          "metaNecessaria": 150,
+          "pontuacaoPossivel": 10,
+          "pontuacaoAtual": 70,
+          "faltaParaNivel": 127,
+          "faltaParaNivelTrimestre": 381
+        },
+        {
+          "metaNecessaria": 250,
+          "pontuacaoPossivel": 20,
+          "pontuacaoAtual": 70,
+          "faltaParaNivel": 227,
+          "faltaParaNivelTrimestre": 681
+        },
+        {
+          "metaNecessaria": 500,
+          "pontuacaoPossivel": 30,
+          "pontuacaoAtual": 70,
+          "faltaParaNivel": 477,
+          "faltaParaNivelTrimestre": 1431
+        }
+      ]
+    },
+    "name": "Volume"
+  },
+  "Meta Total": {
+    "values": {
+      "scoreAtual": 0,
+      "itensAgrupados": [
+        {
+          "label": "META TOTAL",
+          "valor": 122
+        },
+        {
+          "label": "CARTEIRA",
+          "valor": 70,
+          "vsMeta": -51
+        },
+        {
+          "label": "FATURADO",
+          "valor": 0,
+          "vsMeta": -121
+        }
+      ],
+      "regraAtual": "100% meta TOTAL: 10ptos"
+    },
+    "name": "Meta Total"
+  },
+  "Meta Nobre": {
+    "values": {
+      "scoreAtual": 0,
+      "itensAgrupados": [
+        {
+          "label": "META NOBRES",
+          "valor": 115
+        },
+        {
+          "label": "CARTEIRA",
+          "valor": 70,
+          "vsMeta": -45
+        },
+        {
+          "label": "FATURADO",
+          "valor": 0,
+          "vsMeta": -114
+        }
+      ],
+      "regraAtual": "100% meta NOBRES: 10ptos"
+    },
+    "name": "Meta Nobre"
+  },
+  "Performance Rede": {
+    "values": {
+      "scoreAtual": 0,
+      "percentilNobre": "45%",
+      "percentilTotal": "57%",
+      "regraAtual": "100% meta NOBRES: 10ptos"
+    },
+    "name": "Performance Rede"
+  }
+}

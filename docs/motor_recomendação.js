@@ -41,6 +41,26 @@ const formatarNome = (nome) => {
 // Helper: formata número float para exibição limpa (sem artefatos de floating point)
 const fmtNum = (v, decimals = 2) => parseFloat(v.toFixed(decimals));
 
+// Branco Ártico e Preto vêm da planilha como (ORIGINAL), mas pertencem à família ULTRA.
+// Normalizamos na leitura para manter comparações e exibição consistentes.
+const normalizarLabelG1 = (label) => {
+  if (!label) return label;
+  if (label === "BRANCO ÁRTICO (ORIGINAL)") return "BRANCO ÁRTICO (ULTRA)";
+  if (label === "PRETO (ORIGINAL)") return "PRETO (ULTRA)";
+  return label;
+};
+const normalizarItemG1 = (item) => ({ ...item, label: normalizarLabelG1(item.label) });
+
+// ================================================================
+// FLAGS DE COMPORTAMENTO (hooks reversíveis)
+// ================================================================
+// OVERSHOOT_STRATEGY controla seleção adaptativa de ações:
+//   "adaptive" — (padrão) Pula ação atual se alguma posterior fecha o gap
+//                sozinha ou com menos overshoot. Minimiza nº de ações e overshoot.
+//   "strict"   — Ordem fixa sempre. Motor adiciona G1, Lanç, Ultra, etc. na ordem,
+//                sem pular, e para só quando o gap é fechado.
+const OVERSHOOT_STRATEGY = "adaptive";
+
 // ================================================================
 // REGRAS HARDCODED
 // ================================================================
@@ -84,7 +104,7 @@ const redeMaxPoints = 10;
 // ================================================================
 // SCORES EFETIVOS
 // ================================================================
-const profPontosScore = num(profPontos.scoreAtual);
+const profPontosScore = num(profPontos.posicaoAtual?.pontuacaoGanha);
 
 const g1Validos = num(grupo1.quantidadeValidos);
 const g1Met = g1Validos >= g1Threshold;
@@ -143,7 +163,7 @@ const precisaMaisParaTotal = Math.max(0, precisaTotal - precisaNobre);
 // Lista de prioridade G1 (curva BC — ordem definida pelo cliente)
 const G1_ORDEM_PRIORIDADE = [
   "GIANDUIA (TRAMA)",
-  "BRANCO ÁRTICO (ORIGINAL)",
+  "BRANCO ÁRTICO (ULTRA)",
   "TITÂNIO (TRAMA)",
   "OFF WHITE SUAVE (SENSE)",
   "PALHA (TRAMA)",
@@ -152,7 +172,7 @@ const G1_ORDEM_PRIORIDADE = [
   "CARVALHO DIAN (PRISMA)",
   "NOCE AMÊNDOA (ESSENCIAL)",
   "LINHO BELGA (SENSE)",
-  "PRETO (ORIGINAL)",
+  "PRETO (ULTRA)",
   "AMÊNDOLA RÚSTICA (PRISMA)",
   "CARVALHO LIR (PRISMA)",
   "NOCE MARE (ESSENCIAL)",
@@ -169,37 +189,43 @@ const g1Posicao = (label) => {
 
 // Prioridade: 1º ULTRA+hist, 2º Normal+hist (ambos ordenados pela lista)
 const itensOk12m = new Set(
-  (ultimos12m.itensValidos || []).filter(i => i.status === "OK").map(i => i.label)
+  (ultimos12m.itensValidos || []).filter(i => i.status === "OK").map(i => normalizarLabelG1(i.label))
 );
 
-const g1Invalidos = (grupo1.itensInvalidos || []);
 const isUltra = (item) => (item.group || "").toUpperCase().includes("ULTRA");
 
-const g1Tier1 = g1Invalidos.filter(i => isUltra(i) && itensOk12m.has(i.label)).map(i => i.label).sort((a, b) => g1Posicao(a) - g1Posicao(b));
-const g1Tier2 = g1Invalidos.filter(i => isUltra(i) && !itensOk12m.has(i.label)).map(i => i.label).sort((a, b) => g1Posicao(a) - g1Posicao(b));
-const g1Tier3 = g1Invalidos.filter(i => !isUltra(i) && itensOk12m.has(i.label)).map(i => i.label).sort((a, b) => g1Posicao(a) - g1Posicao(b));
-const g1Tier4 = g1Invalidos.filter(i => !isUltra(i) && !itensOk12m.has(i.label)).map(i => i.label).sort((a, b) => g1Posicao(a) - g1Posicao(b));
+// Top-down pela curva ABC: pega os inválidos na ordem da lista de prioridade.
+// Itens fora da lista vão para o final (g1Posicao retorna 999).
+const g1Invalidos = (grupo1.itensInvalidos || [])
+  .map(normalizarItemG1)
+  .sort((a, b) => g1Posicao(a.label) - g1Posicao(b.label));
 
-// Lista priorizada: APENAS itens com histórico, ordenados pela lista de prioridade
-const g1ItensPriorizados = [...g1Tier1, ...g1Tier3];
+const g1ItensPriorizados = g1Invalidos.map(i => i.label);
 
-// Set de labels ULTRA para referência rápida
-const g1UltraLabels = new Set([...g1Tier1, ...g1Tier2]);
+// Set de labels ULTRA para ⭐ e cross-reference com Ultra Premium
+const g1UltraLabels = new Set(g1Invalidos.filter(isUltra).map(i => i.label));
 
-// Mantém compatibilidade com referências existentes
-const g1ItensSugestiveis = [...g1Tier1, ...g1Tier3]; // todos com histórico
-const g1ItensSemHistorico = [...g1Tier2, ...g1Tier4]; // todos sem histórico
+// Sub-listas informativas (com/sem histórico 12m) — metadado, não reordena
+const g1ItensSugestiveis = g1Invalidos.filter(i => itensOk12m.has(i.label)).map(i => i.label);
+const g1ItensSemHistorico = g1Invalidos.filter(i => !itensOk12m.has(i.label)).map(i => i.label);
 
 // ================================================================
 // PROFUNDIDADE GERAL (agora com múltiplos tiers, como Volume)
 // ================================================================
 const profAtualPts = num(profPontos.posicaoAtual?.pontuacaoGanha);
+// Tier de dificuldade: 'facil' (< 10), 'media' (10-30), 'impossivel' (> 30).
+// IMPOSSÍVEL é usado apenas como último recurso (fallback após Volume).
+const classificarProfTier = (falta) => {
+  if (falta < 10) return "facil";
+  if (falta <= 30) return "media";
+  return "impossivel";
+};
 const profNiveis = (profPontos.proximosNiveis || []).map(n => ({
   metaNecessaria: num(n.metaNecessaria),
   pontuacaoPossivel: num(n.pontuacaoPossivel),
   faltaParaNivel: num(n.faltaParaNivel),
   pontosIncrementais: num(n.pontuacaoPossivel) - profAtualPts,
-  facil: num(n.faltaParaNivel) > 0 && num(n.faltaParaNivel) < 10
+  tier: classificarProfTier(num(n.faltaParaNivel))
 })).filter(n => n.faltaParaNivel > 0 && n.pontosIncrementais > 0);
 
 // ================================================================
@@ -225,6 +251,7 @@ const volumeNiveis = (volume.proximosNiveis || []).map(n => {
     metaMensal,
     metaTrimestral,
     pontuacaoPossivel: num(n.pontuacaoPossivel),
+    pontosIncrementais: num(n.pontuacaoPossivel) - volumeEffScore,
     pontuacaoAtual,
     faltaM3Trimestre: faltaTrimestre,
     faltaM3Mensal: faltaMensal,
@@ -232,7 +259,7 @@ const volumeNiveis = (volume.proximosNiveis || []).map(n => {
     palletsMensal,
     facil: ratio < 1.30
   };
-}).filter(n => n.faltaM3Trimestre > 0); // Ignora níveis já atingíveis (falta 0)
+}).filter(n => n.faltaM3Trimestre > 0 && n.pontosIncrementais > 0);
 
 // ================================================================
 // CORINGA GARANTIDO — incluir no score base quando já conquistado
@@ -378,7 +405,7 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
     
     acoesPossiveis.push({
       pos: 1, nome: "Positivação Grupo 1", pontos: g1MaxPoints,
-      descricao: `Comprar ${faltam} padrões internos para garantir +${g1MaxPoints}pts.`,
+      descricao: `Comprar ${faltam} padrões do Grupo 1 para garantir +${g1MaxPoints}pts.`,
       itens: itensTagueados,
       itensComHistorico: itensRaw.filter(i => g1ItensSugestiveis.includes(i)),
       itensSemHistorico: itensRaw.filter(i => g1ItensSemHistorico.includes(i)),
@@ -386,26 +413,27 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
     });
   }
 
-  // Pos 2: Lançamentos
+  // Pos 2: Lançamentos — cria uma sub-ação por tier (ordem adaptativa escolherá)
   if (lancEffScore < (lancRegras[0]?.points || 0)) {
     const lancItens = (lancamentos.itensInvalidos || []).map(i => i.label);
-    let tierEscolhido = null;
-    for (const tier of lancRegras) {
-      if (lancItens.length >= (tier.threshold - lancValidos)) { tierEscolhido = tier; break; }
-    }
-    if (!tierEscolhido) {
-      for (const tier of [...lancRegras].reverse()) { tierEscolhido = tier; break; }
-    }
-    if (tierEscolhido) {
-      const faltam = tierEscolhido.threshold - lancValidos;
+    // Tiers ordenados do MENOR para o MAIOR ganho incremental (menor esforço primeiro)
+    const tiersOrdenados = [...lancRegras]
+      .filter(tier => tier.points > lancEffScore && lancItens.length >= (tier.threshold - lancValidos))
+      .sort((a, b) => a.points - b.points);
+    // Cada tier vira uma ação marcada com _isLancTier para o handler
+    tiersOrdenados.forEach((tier, tierIdx) => {
+      const faltam = tier.threshold - lancValidos;
+      const incremento = tier.points - lancEffScore;
       acoesPossiveis.push({
-        pos: 2, nome: "Positivação de Lançamentos",
-        pontos: tierEscolhido.points - lancEffScore,
-        pontosAbsolutos: tierEscolhido.points,
-        descricao: `Implantar ${faltam} lançamentos para garantir +${tierEscolhido.points - lancEffScore}pts.`,
+        pos: 2 + tierIdx * 0.01, // sub-ordem entre tiers de Lanç
+        nome: "Positivação de Lançamentos",
+        pontos: incremento,
+        pontosAbsolutos: tier.points,
+        _isLancTier: true,
+        descricao: `Implantar ${faltam} lançamentos para garantir +${incremento}pts.`,
         itens: lancItens.slice(0, faltam)
       });
-    }
+    });
   }
 
   // Pos 3: Ultra Premium
@@ -427,46 +455,51 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
     });
   }
 
-  // Pos 4: Prof Geral FÁCIL (tiers com faltaParaNivel < 10)
-  if (profNiveis.some(n => n.facil)) {
-    acoesPossiveis.push({ pos: 4, _isProfFacil: true });
+  // Pos 0: Performance da Rede (cálculo primeiro no cenário Rede;
+  // exibição é movida para o fim em pós-processamento)
+  if (isCenarioRede && !redeMet) {
+    acoesPossiveis.push({
+      pos: 0, nome: "Performance da Rede", pontos: redeMaxPoints,
+      descricao: `Se a rede atingir 100% da meta Nobres, garante +${redeMaxPoints}pts. Além disso, se a rede atingir 100% da meta Total você ganha um bônus Coringa adicional.`,
+      dependeDaEquipe: true
+    });
   }
 
-  // Pos 5: Meta Nobre
+  // Pos 4: Meta Nobre
   if (!nobreMet) {
     acoesPossiveis.push({
-      pos: 5, nome: "Meta Nobres", pontos: nobreMaxPoints,
+      pos: 4, nome: "Meta Nobres", pontos: nobreMaxPoints,
       descricao: `Comprar +${precisaNobre}m³ em produtos Nobres para atingir a meta e garantir +${nobreMaxPoints}pts.`,
     });
   }
 
-  // Pos 6: Meta Total (dinâmica)
+  // Pos 5: Meta Total (dinâmica)
   if (!totalMet) {
     acoesPossiveis.push({
-      pos: 6, nome: "Meta Total", pontos: totalMaxPoints,
+      pos: 5, nome: "Meta Total", pontos: totalMaxPoints,
       _isDynamic: true
     });
   }
 
-  // Pos 7: Prof Geral DIFÍCIL (tiers com faltaParaNivel >= 10)
-  if (profNiveis.some(n => !n.facil)) {
-    acoesPossiveis.push({ pos: 7, _isProfDificil: true });
+  // Pos 6: Prof Geral FÁCIL (< 10 padrões faltantes)
+  if (profNiveis.some(n => n.tier === "facil")) {
+    acoesPossiveis.push({ pos: 6, _isProfFacil: true });
   }
 
-  // Rede + Volume (ordem diferente por cenário)
-  if (isCenarioRede) {
-    if (!redeMet) {
-      acoesPossiveis.push({
-        pos: 8, nome: "Performance da Rede", pontos: redeMaxPoints,
-        descricao: `A rede precisa atingir 100% da meta Nobres (atualmente em ${perfRede.percentilNobre || '0%'}, faltam ${(100 - redeNobrePct).toFixed(1)}pp). Garante +${redeMaxPoints}pts. Além disso, se a rede atingir 100% da meta Total (atualmente em ${perfRede.percentilTotal || '0%'}, faltam ${(100 - redeTotalPct).toFixed(1)}pp), você ganha um bônus Coringa adicional.`,
-        dependeDaEquipe: true
-      });
-    }
-    acoesPossiveis.push({ pos: 9, _isVolumeFacil: true });
-    acoesPossiveis.push({ pos: 10, _isVolumeDificil: true });
-  } else {
-    acoesPossiveis.push({ pos: 8, _isVolumeFacil: true });
-    acoesPossiveis.push({ pos: 11, _isVolumeDificil: true });
+  // Pos 7: Prof Geral MÉDIA (10-30 padrões faltantes)
+  if (profNiveis.some(n => n.tier === "media")) {
+    acoesPossiveis.push({ pos: 7, _isProfMedia: true });
+  }
+
+  // Pos 8: Volume FÁCIL
+  acoesPossiveis.push({ pos: 8, _isVolumeFacil: true });
+
+  // Pos 9: Volume DIFÍCIL
+  acoesPossiveis.push({ pos: 9, _isVolumeDificil: true });
+
+  // Pos 10: Prof Geral IMPOSSÍVEL (> 30 padrões faltantes) — último recurso
+  if (profNiveis.some(n => n.tier === "impossivel")) {
+    acoesPossiveis.push({ pos: 10, _isProfImpossivel: true });
   }
 
   acoesPossiveis.sort((a, b) => a.pos - b.pos);
@@ -474,9 +507,11 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
   // --- Executar ações até fechar o gap ---
   let pontosAcumulados = 0;
   const acoesFinais = [];
+  const acoesPuladas = new Set(); // índices já processados (executados ou descartados via lookahead)
   let nobreRecomendada = false;
   let redeRecomendada = false;
   let profGeralTierSelecionado = null; // tier selecionado para Coringa
+  let lancTierSelecionado = false;     // guard: uma Lanç por cenário
   let lancRecomendadaPts = 0;
 
   // Helper: simula o bônus Coringa para um dado tier de Prof Geral
@@ -517,36 +552,176 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
   //   então contar o Coringa condicional é consistente com contar a ação Performance da Rede
   const coringaOtimizacaoAtiva = coringaGarantidoBase === 0 && (redeTotalPct >= 100 || isCenarioRede);
 
-  // Helper: seleciona o melhor tier de Prof considerando Coringa
+  // Helper: seleciona o menor tier que feche o gap (evita overshoot).
+  // Se nenhum tier sozinho fecha, pega o maior disponível.
+  // Em cenários com Coringa ativo, o tie-break prefere o tier que maximiza Coringa.
   const selecionarProfTier = (tiersDisponiveis, gapRestante) => {
     if (tiersDisponiveis.length === 0) return null;
 
-    if (isCenarioRede || coringaOtimizacaoAtiva) {
-      // Avalia cada tier pelo total líquido: incremental + coringa
-      // Em empate, prefere o tier que preserva Coringa (menor incremental)
-      let melhor = null;
-      let melhorTotal = -1;
-      let melhorCoringa = -1;
-      for (const tier of tiersDisponiveis) {
-        const coringa = simularCoringa(tier);
-        const totalLiquido = tier.pontosIncrementais + coringa;
-        if (totalLiquido > melhorTotal || 
-            (totalLiquido === melhorTotal && coringa > melhorCoringa)) {
-          melhorTotal = totalLiquido;
-          melhorCoringa = coringa;
-          melhor = tier;
-        }
-      }
-      return melhor;
-    } else {
-      // Cenários sem otimização: pega o primeiro que fecha o gap, ou o maior
-      let nivel = tiersDisponiveis.find(n => n.pontosIncrementais >= gapRestante);
-      if (!nivel) nivel = [...tiersDisponiveis].sort((a, b) => b.pontosIncrementais - a.pontosIncrementais)[0];
-      return nivel;
+    const ordenados = [...tiersDisponiveis].sort((a, b) => a.pontosIncrementais - b.pontosIncrementais);
+    const queFecham = ordenados.filter(n => n.pontosIncrementais >= gapRestante);
+
+    if (queFecham.length === 0) {
+      // Nenhum tier sozinho fecha — pega o maior
+      return ordenados[ordenados.length - 1];
     }
+
+    // Menor valor incremental que fecha é a escolha ideal (menor overshoot)
+    const menorIncremental = queFecham[0].pontosIncrementais;
+    const candidatos = queFecham.filter(n => n.pontosIncrementais === menorIncremental);
+
+    if (candidatos.length === 1) return candidatos[0];
+
+    // Empate: se Coringa está ativo, prefere o tier que maximiza Coringa
+    if (isCenarioRede || coringaOtimizacaoAtiva) {
+      return candidatos.reduce((melhor, atual) =>
+        simularCoringa(atual) > simularCoringa(melhor) ? atual : melhor
+      );
+    }
+    return candidatos[0];
   };
 
-  for (const acao of acoesPossiveis) {
+  // Helper: simula quantos pontos a ação adicionaria se executada agora.
+  // Usado para lookahead (decidir se uma ação posterior fecharia com menos overshoot).
+  const simularPontosDaAcao = (acao) => {
+    // Meta Total: sempre totalMaxPoints (dinâmica mas pontuação fixa)
+    if (acao._isDynamic && acao.nome === "Meta Total") return totalMaxPoints;
+
+    // Prof Geral: depende do tier escolhido pelo selecionarProfTier.
+    // Inclui o DELTA do Coringa que essa escolha ativaria (soma de meios muda).
+    const profTier = acao._isProfFacil ? "facil"
+      : acao._isProfMedia ? "media"
+      : acao._isProfImpossivel ? "impossivel"
+      : null;
+    if (profTier) {
+      if (profGeralTierSelecionado) return 0;
+      const tiers = profNiveis.filter(n => n.tier === profTier);
+      const gapRestante = Math.max(0, gap - pontosAcumulados);
+      const nivel = selecionarProfTier(tiers, gapRestante);
+      if (!nivel) return 0;
+      // Delta Coringa: mudança no bônus ao trocar profAtualPts por nivel.pontuacaoPossivel na soma de meios
+      let deltaCoringa = 0;
+      if (coringaOtimizacaoAtiva) {
+        const somaBase = somaMeiosAtual();
+        const somaComTier = somaBase - profAtualPts + nivel.pontuacaoPossivel;
+        deltaCoringa = coringaParaSoma(somaComTier) - coringaParaSoma(somaBase);
+      }
+      return nivel.pontosIncrementais + deltaCoringa;
+    }
+
+    // Volume FÁCIL/DIFÍCIL: encontra o menor tier que fecha
+    if (acao._isVolumeFacil || acao._isVolumeDificil) {
+      let gapRestante = gap - pontosAcumulados;
+      if (coringaOtimizacaoAtiva) {
+        gapRestante = Math.max(0, gapRestante - simularCoringa(profGeralTierSelecionado));
+      }
+      if (gapRestante <= 0) return 0;
+      const filtro = acao._isVolumeFacil ? (n) => n.facil : (n) => !n.facil;
+      const candidatos = volumeNiveis.filter(filtro);
+      const fecha = candidatos.find(n => n.pontosIncrementais >= gapRestante);
+      if (fecha) return fecha.pontosIncrementais;
+      // Nenhum tier fecha sozinho → retorna o MAIOR disponível dessa dificuldade
+      // (útil para adaptive saber que ação pode contribuir parcialmente)
+      if (candidatos.length > 0) {
+        return [...candidatos].sort((a, b) => b.pontosIncrementais - a.pontosIncrementais)[0].pontosIncrementais;
+      }
+      return 0;
+    }
+
+    // Lançamentos com tier — só 1 por cenário
+    if (acao._isLancTier && lancTierSelecionado) return 0;
+
+    // Ações normais (G1, Lançamentos, Ultra, Nobre, Rede) — pontos fixos
+    return num(acao.pontos);
+  };
+
+  // Helper: classifica grupo estratégico da ação.
+  // Ações "primárias" (G1, Lanç, Ultra, Nobres, Total) têm valor estratégico alto
+  // e nunca são puladas por ações "secundárias" (Prof Geral, Volume).
+  // Performance da Rede no cenário Rede também é primária (garantida, não pula).
+  const grupoEstrategico = (acao) => {
+    if (acao.nome === "Performance da Rede") return "primaria";
+    // G1=1, Lanç=2, Ultra=3, Nobre=4, Total=5 → primárias
+    // Prof Fácil=6, Prof Média=7, Vol Fácil=8, Vol Difícil=9, Prof Impossível=10 → secundárias
+    return acao.pos >= 1 && acao.pos <= 5 ? "primaria" : "secundaria";
+  };
+
+  // Helper: escolhe o índice da próxima ação a executar, aplicando ordem adaptativa.
+  // Regras (estratégia "adaptive"):
+  //   1. Se a ação atual causa overshoot, procura posterior com menor overshoot
+  //      dentro do MESMO grupo estratégico (primária/secundária).
+  //   2. Se a atual NÃO fecha o gap sozinha mas alguma posterior fecha sozinha,
+  //      pula a atual e usa a posterior — preservando o grupo estratégico da atual
+  //      (primária só pula por primária, secundária pode pular por qualquer).
+  //   3. Caso contrário, mantém a ordem fixa.
+  // Em "strict", sempre mantém a ordem fixa.
+  const escolherProximaAcao = (indiceAtual) => {
+    const acao = acoesPossiveis[indiceAtual];
+    // Coringa projetado entra como "ponte" — tanto a ação atual quanto as posteriores
+    // somam com ele. Descontamos do gap para a decisão do adaptive.
+    const coringaProj = coringaOtimizacaoAtiva ? simularCoringa(profGeralTierSelecionado) : 0;
+    const gapRestante = Math.max(0, gap - pontosAcumulados - coringaProj);
+    const pontosAtual = simularPontosDaAcao(acao);
+
+    // Sem pontos (ex: Prof já escolhida) → pula silenciosamente
+    if (pontosAtual <= 0) return indiceAtual;
+
+    if (OVERSHOOT_STRATEGY === "strict") return indiceAtual;
+
+    const grupoAtual = grupoEstrategico(acao);
+
+    // Coleta candidatas posteriores que fechariam o gap sozinhas.
+    // Se a atual é primária, só considera posteriores primárias
+    // (não pula ação estratégica por secundária).
+    const posterioresQueFecham = [];
+    for (let j = indiceAtual + 1; j < acoesPossiveis.length; j++) {
+      if (acoesPuladas.has(j)) continue;
+      const candidata = acoesPossiveis[j];
+      if (grupoAtual === "primaria" && grupoEstrategico(candidata) !== "primaria") continue;
+      const pontosDela = simularPontosDaAcao(candidata);
+      if (pontosDela <= 0) continue;
+      if (pontosDela < gapRestante) continue; // não fecha sozinha
+      posterioresQueFecham.push({ idx: j, overshoot: pontosDela - gapRestante });
+    }
+
+    const atualFecha = pontosAtual >= gapRestante;
+
+    // Regra 2: atual NÃO fecha sozinha mas alguma posterior fecha com OVERSHOOT ZERO → pular.
+    // Se a posterior que fecha sozinha também causa overshoot, preferimos deixar a atual
+    // contribuir parcialmente (distribuir em ações menores para fechar exato).
+    if (!atualFecha && posterioresQueFecham.length > 0) {
+      const fechaSemOvershoot = posterioresQueFecham.filter(p => p.overshoot === 0);
+      if (fechaSemOvershoot.length > 0) {
+        fechaSemOvershoot.sort((a, b) => a.idx - b.idx);
+        acoesPuladas.add(indiceAtual);
+        return fechaSemOvershoot[0].idx;
+      }
+      // Nenhuma posterior fecha exato. Mantém a atual para contribuir parcialmente.
+      return indiceAtual;
+    }
+
+    // Regra 1: atual fecha mas causa overshoot → procurar posterior com menor overshoot.
+    // Hierarquia: menor overshoot > menor idx (ordem fixa)
+    if (atualFecha) {
+      const overshootAtual = pontosAtual - gapRestante;
+      const candidatas = [{ idx: indiceAtual, overshoot: overshootAtual }, ...posterioresQueFecham];
+      candidatas.sort((a, b) => a.overshoot - b.overshoot || a.idx - b.idx);
+      const melhor = candidatas[0];
+      if (melhor.idx !== indiceAtual) acoesPuladas.add(indiceAtual);
+      return melhor.idx;
+    }
+
+    // Atual não fecha e nenhuma posterior fecha → segue ordem fixa (acumular)
+    return indiceAtual;
+  };
+
+  for (let _i = 0; _i < acoesPossiveis.length; _i++) {
+    if (acoesPuladas.has(_i)) continue;
+    const idxEscolhido = escolherProximaAcao(_i);
+    if (acoesPuladas.has(idxEscolhido)) continue; // proteção extra
+    const acao = acoesPossiveis[idxEscolhido];
+    acoesPuladas.add(idxEscolhido);
+
     if (pontosAcumulados >= gap) break;
 
     // Coringa: se a flag de otimização está ativa, simula se o bônus projetado
@@ -556,6 +731,9 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
       const coringaBonus = simularCoringa(profGeralTierSelecionado);
       if (coringaBonus > 0 && pontosAcumulados + coringaBonus >= gap) break;
     }
+
+    // Lançamentos: só uma variante por cenário (tiers alternativos)
+    if (acao._isLancTier && lancTierSelecionado) continue;
 
     // Meta Total: resolução dinâmica
     if (acao._isDynamic && acao.nome === "Meta Total") {
@@ -582,12 +760,16 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
       continue;
     }
 
-    // Prof Geral FÁCIL (< 10 padrões)
-    if (acao._isProfFacil) {
-      if (profGeralTierSelecionado) continue; // já recomendada
+    // Prof Geral FÁCIL / MÉDIA / IMPOSSÍVEL — handler único parametrizado
+    const profTierDaAcao = acao._isProfFacil ? "facil"
+      : acao._isProfMedia ? "media"
+      : acao._isProfImpossivel ? "impossivel"
+      : null;
+    if (profTierDaAcao) {
+      if (profGeralTierSelecionado) continue; // já recomendada neste cenário
       const gapRestante = gap - pontosAcumulados;
       if (gapRestante <= 0) continue;
-      const tiersDisponiveis = profNiveis.filter(n => n.facil);
+      const tiersDisponiveis = profNiveis.filter(n => n.tier === profTierDaAcao);
       const nivel = selecionarProfTier(tiersDisponiveis, gapRestante);
       if (nivel) {
         // Otimização Coringa: verificar ganho líquido
@@ -599,43 +781,16 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
         }
         pontosAcumulados += nivel.pontosIncrementais;
         profGeralTierSelecionado = nivel;
+        const rotuloDificuldade = profTierDaAcao === "facil" ? "FÁCIL"
+          : profTierDaAcao === "media" ? "MÉDIA"
+          : "DIFÍCIL";
         acoesFinais.push({
           nome: "Profundidade Geral",
           pontos: nivel.pontosIncrementais,
           descricao: `Positivar mais ${nivel.faltaParaNivel} padrões no portfólio geral para subir de ${profAtualPts} para ${nivel.pontuacaoPossivel}pts (+${nivel.pontosIncrementais}pts).`,
           scoreAcumulado: scoreEfetivo + pontosAcumulados,
           gapRestante: Math.max(0, gap - pontosAcumulados),
-          dificuldade: "FÁCIL"
-        });
-      }
-      continue;
-    }
-
-    // Prof Geral DIFÍCIL (>= 10 padrões)
-    if (acao._isProfDificil) {
-      if (profGeralTierSelecionado) continue; // já recomendada
-      const gapRestante = gap - pontosAcumulados;
-      if (gapRestante <= 0) continue;
-      const tiersDisponiveis = profNiveis.filter(n => !n.facil);
-      let nivel = selecionarProfTier(tiersDisponiveis, gapRestante);
-      if (!nivel) nivel = selecionarProfTier(profNiveis, gapRestante); // fallback: any tier
-      if (nivel) {
-        // Otimização Coringa: verificar ganho líquido
-        if (coringaOtimizacaoAtiva) {
-          const sB = somaMeiosAtual();
-          const sA = sB - profAtualPts + nivel.pontuacaoPossivel;
-          const ganho = nivel.pontosIncrementais - (coringaParaSoma(sB) - coringaParaSoma(sA));
-          if (ganho <= 0) { continue; } // pular — Coringa compensa
-        }
-        pontosAcumulados += nivel.pontosIncrementais;
-        profGeralTierSelecionado = nivel;
-        acoesFinais.push({
-          nome: "Profundidade Geral",
-          pontos: nivel.pontosIncrementais,
-          descricao: `Positivar mais ${nivel.faltaParaNivel} padrões no portfólio geral para subir de ${profAtualPts} para ${nivel.pontuacaoPossivel}pts (+${nivel.pontosIncrementais}pts).`,
-          scoreAcumulado: scoreEfetivo + pontosAcumulados,
-          gapRestante: Math.max(0, gap - pontosAcumulados),
-          dificuldade: "DIFÍCIL"
+          dificuldade: rotuloDificuldade
         });
       }
       continue;
@@ -649,13 +804,16 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
         gapRestante = Math.max(0, gapRestante - simularCoringa(profGeralTierSelecionado));
       }
       if (gapRestante <= 0) continue;
-      const nivel = volumeNiveis.find(n => n.facil && n.pontuacaoPossivel >= gapRestante);
+      const nivel = volumeNiveis.find(n => n.facil && n.pontosIncrementais >= gapRestante);
       if (nivel) {
-        pontosAcumulados += nivel.pontuacaoPossivel;
+        pontosAcumulados += nivel.pontosIncrementais;
+        const baseDesc = volumeEffScore > 0
+          ? `Subir de ${num(volume.posicaoAtual?.metaAtingida)}m³/mês (${volumeEffScore}pts já garantidos) para ${nivel.metaMensal}m³/mês (${nivel.pontuacaoPossivel}pts). Faltam ${nivel.faltaM3Trimestre}m³ acumulados no trimestre, ≈${nivel.palletsTrimestre} pallets. Ganho: +${nivel.pontosIncrementais}pts.`
+          : `Atingir volume de ${nivel.metaMensal}m³/mês (faltam ${nivel.faltaM3Trimestre}m³ acumulados no trimestre, ≈${nivel.palletsTrimestre} pallets). Garante +${nivel.pontosIncrementais}pts.`;
         acoesFinais.push({
           nome: "Volume Mensal",
-          pontos: nivel.pontuacaoPossivel,
-          descricao: `Atingir volume de ${nivel.metaMensal}m³/mês (faltam ${nivel.faltaM3Trimestre}m³ acumulados no trimestre, ≈${nivel.palletsTrimestre} pallets). Garante +${nivel.pontuacaoPossivel}pts.`,
+          pontos: nivel.pontosIncrementais,
+          descricao: baseDesc,
           scoreAcumulado: scoreEfetivo + pontosAcumulados,
           gapRestante: Math.max(0, gap - pontosAcumulados),
           dificuldade: "FÁCIL"
@@ -671,15 +829,18 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
         gapRestante = Math.max(0, gapRestante - simularCoringa(profGeralTierSelecionado));
       }
       if (gapRestante <= 0) continue;
-      let nivel = volumeNiveis.find(n => !n.facil && n.pontuacaoPossivel >= gapRestante);
-      if (!nivel) nivel = [...volumeNiveis].filter(n => !n.facil).sort((a, b) => b.pontuacaoPossivel - a.pontuacaoPossivel)[0];
-      if (!nivel) nivel = volumeNiveis.find(n => n.pontuacaoPossivel >= gapRestante);
+      let nivel = volumeNiveis.find(n => !n.facil && n.pontosIncrementais >= gapRestante);
+      if (!nivel) nivel = [...volumeNiveis].filter(n => !n.facil).sort((a, b) => b.pontosIncrementais - a.pontosIncrementais)[0];
+      if (!nivel) nivel = volumeNiveis.find(n => n.pontosIncrementais >= gapRestante);
       if (nivel) {
-        pontosAcumulados += nivel.pontuacaoPossivel;
+        pontosAcumulados += nivel.pontosIncrementais;
+        const baseDesc = volumeEffScore > 0
+          ? `Subir de ${num(volume.posicaoAtual?.metaAtingida)}m³/mês (${volumeEffScore}pts já garantidos) para ${nivel.metaMensal}m³/mês (${nivel.pontuacaoPossivel}pts). Faltam ${nivel.faltaM3Trimestre}m³ acumulados no trimestre, ≈${nivel.palletsTrimestre} pallets. Ganho: +${nivel.pontosIncrementais}pts.`
+          : `Atingir volume de ${nivel.metaMensal}m³/mês (faltam ${nivel.faltaM3Trimestre}m³ acumulados no trimestre, ≈${nivel.palletsTrimestre} pallets). Garante +${nivel.pontosIncrementais}pts.`;
         acoesFinais.push({
           nome: "Volume Mensal",
-          pontos: nivel.pontuacaoPossivel,
-          descricao: `Atingir volume de ${nivel.metaMensal}m³/mês (faltam ${nivel.faltaM3Trimestre}m³ acumulados no trimestre, ≈${nivel.palletsTrimestre} pallets). Garante +${nivel.pontuacaoPossivel}pts.`,
+          pontos: nivel.pontosIncrementais,
+          descricao: baseDesc,
           scoreAcumulado: scoreEfetivo + pontosAcumulados,
           gapRestante: Math.max(0, gap - pontosAcumulados),
           dificuldade: "DIFÍCIL"
@@ -710,7 +871,10 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
     pontosAcumulados += acao.pontos;
     if (acao.nome === "Meta Nobres") nobreRecomendada = true;
     if (acao.nome === "Performance da Rede") redeRecomendada = true;
-    if (acao.nome?.includes("Lançamentos")) lancRecomendadaPts = acao.pontosAbsolutos || acao.pontos;
+    if (acao.nome?.includes("Lançamentos")) {
+      lancRecomendadaPts = acao.pontosAbsolutos || acao.pontos;
+      lancTierSelecionado = true;
+    }
 
     const acaoFinal = {
       nome: acao.nome,
@@ -725,6 +889,44 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
     if (acao.dependeDaEquipe) acaoFinal.dependeDaEquipe = true;
 
     acoesFinais.push(acaoFinal);
+  }
+
+  // --- Pós-processamento: remover ações redundantes (anti-overshoot) ---
+  // Se remover uma ação ainda mantém o gap fechado, ela é excedente.
+  // Preserva Prof Geral e Volume (ações de tier variável — já escolhidas como mínimo).
+  // Preserva Performance da Rede (sempre recomendada no cenário Rede).
+  if (OVERSHOOT_STRATEGY === "adaptive" && acoesFinais.length > 0) {
+    const acoesProtegidas = new Set(["Profundidade Geral", "Performance da Rede", "Volume Mensal"]);
+    let removeu = true;
+    while (removeu) {
+      removeu = false;
+      for (let i = 0; i < acoesFinais.length; i++) {
+        const a = acoesFinais[i];
+        if (acoesProtegidas.has(a.nome)) continue;
+        // Soma sem essa ação
+        const somaSem = acoesFinais.reduce((acc, x, idx) => idx === i ? acc : acc + x.pontos, 0);
+        if (somaSem >= gap) {
+          // Remove ação redundante
+          acoesFinais.splice(i, 1);
+          pontosAcumulados -= a.pontos;
+          // Se era Lanç, resetar flag
+          if (a.nome?.includes("Lançamentos")) {
+            lancTierSelecionado = false;
+            lancRecomendadaPts = 0;
+          }
+          if (a.nome === "Meta Nobres") nobreRecomendada = false;
+          removeu = true;
+          break;
+        }
+      }
+    }
+    // Recalcula scoreAcumulado/gapRestante após remoções
+    let acum = 0;
+    for (const a of acoesFinais) {
+      acum += a.pontos;
+      a.scoreAcumulado = scoreEfetivo + acum;
+      a.gapRestante = Math.max(0, gap - acum);
+    }
   }
 
   // --- Nota Coringa ---
@@ -782,6 +984,24 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
   const pontosFinal = scoreEfetivo + pontosAcumulados + coringaCenarioGarantido;
   const gapFinal = Math.max(0, gap - pontosAcumulados - coringaCenarioGarantido);
 
+  // Exibição: Performance da Rede entra primeiro no cálculo mas deve aparecer
+  // como última ação no e-mail (depende da equipe, não do cliente).
+  // Recalcula scoreAcumulado/gapRestante na ordem visual.
+  const acoesExibicao = isCenarioRede
+    ? [
+        ...acoesFinais.filter(a => a.nome !== "Performance da Rede"),
+        ...acoesFinais.filter(a => a.nome === "Performance da Rede")
+      ]
+    : acoesFinais;
+  if (isCenarioRede) {
+    let acum = 0;
+    for (const a of acoesExibicao) {
+      acum += num(a.pontos);
+      a.scoreAcumulado = scoreEfetivo + acum;
+      a.gapRestante = Math.max(0, gap - acum);
+    }
+  }
+
   return {
     titulo: label,
     posicaoAlvo: posAlvo,
@@ -793,7 +1013,7 @@ const buildCenario = (label, pontosAlvo, posAlvo, descAlvo, isCenarioRede) => {
     cenarioViavel: gapFinal <= 0,
     pontosFinal,
     gapFinal,
-    acoes: acoesFinais,
+    acoes: acoesExibicao,
     notaCoringa,
     mensagem: gapFinal <= 0
       ? `Com essas ações${coringaCenarioGarantido > 0 ? ' + Coringa garantido (+' + coringaCenarioGarantido + 'pts)' : ''}, você atinge ${pontosFinal}pts (necessário: ${pontosAlvo}pts).`

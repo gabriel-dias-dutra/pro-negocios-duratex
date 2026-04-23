@@ -1,8 +1,11 @@
 
   {
+    "info": {
+      "seller": "ALINE SOUZA ALVES",
+      "client": "GRUPO SERIGY"
+    },
     "Profundidade Pontos": {
       "values": {
-        "scoreAtual": 15,
         "valorAtual": 80,
         "posicaoAtual": {
           "metaAtingida": 80,
